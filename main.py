@@ -8,6 +8,7 @@ from settings import *
 from hexgrid import generate_hex_map, draw_map, axial_to_pixel, hex_corners
 from entities import Unit, Longbow
 from ai import SimpleAI, screen_stub, stub_font
+from stats import GameStats
 import ui
 
 # Initialize Pygame
@@ -37,7 +38,7 @@ def generate_terrain(coords):
 terrain_map = generate_terrain(map_coords)
 
 # Unit spawning
-def spawn_units():
+def spawn_units(record_unit_lost=None):
     units = []
     spawnable = list(map_coords)
     random.shuffle(spawnable)
@@ -48,22 +49,25 @@ def spawn_units():
         q, r = coord
         # bias spawn by r coordinate
         if len([u for u in units if u.owner == 0]) < MAX_UNITS//2 and r < 1:
-            units.append(Unit('P', q, r, owner=0))
+            units.append(Unit('P', q, r, owner=0, record_unit_lost=record_unit_lost))
         elif len([u for u in units if u.owner == 1]) < MAX_UNITS - MAX_UNITS//2 and r > -1:
-            units.append(Unit('E', q, r, owner=1))
+            units.append(Unit('E', q, r, owner=1, record_unit_lost=record_unit_lost))
     # replace one unit on each side with a Longbow if available
     for side in [0, 1]:
         team = [u for u in units if u.owner == side]
         if team:
             victim = team[0]
             units.remove(victim)
-            units.append(Longbow('L', victim.q, victim.r, owner=side))
+            units.append(Longbow('L', victim.q, victim.r, owner=side, record_unit_lost=record_unit_lost))
     return units
 
-units = spawn_units()
+
+stats = GameStats()
+units = spawn_units(record_unit_lost=stats.record_unit_lost)
 
 # Hook the AI stubs to real references
-ai = SimpleAI(units, map_coords, terrain_map)
+# Pass stats.record_attack to AI so it can track AI attacks
+ai = SimpleAI(units, map_coords, terrain_map, record_attack=stats.record_attack)
 # monkey patch animation references expected by ai module
 import ai as ai_module
 ai_module.screen_stub = lambda: screen
@@ -86,6 +90,7 @@ reset_rect = pygame.Rect(SCREEN_WIDTH - 170, 58, 150, 36)
 start_rect = pygame.Rect(SCREEN_WIDTH//2 - 90, SCREEN_HEIGHT//2 + 40, 180, 42)
 quit_rect = pygame.Rect(SCREEN_WIDTH//2 - 90, SCREEN_HEIGHT//2 + 96, 180, 42)
 rules_rect = pygame.Rect(SCREEN_WIDTH//2 - 90, SCREEN_HEIGHT//2 - 20, 180, 42)
+export_rect = pygame.Rect(SCREEN_WIDTH//2 - 90, SCREEN_HEIGHT//2 + 150, 180, 42)
 
 # Helpers
 def unit_at(q, r):
@@ -123,11 +128,11 @@ def end_turn():
 
 # Reset the whole game without closing window
 def reset_game():
-    global units, ai, terrain_map, current_turn, state, message
+    global units, ai, terrain_map, current_turn, state, message, stats
     terrain_map = generate_terrain(map_coords)
-    units = spawn_units()
-    ai = SimpleAI(units, map_coords, terrain_map)
-    # re-patch stubs
+    stats = GameStats()
+    units = spawn_units(record_unit_lost=stats.record_unit_lost)
+    ai = SimpleAI(units, map_coords, terrain_map, record_attack=stats.record_attack)
     ai_module.screen_stub = lambda: screen
     ai_module.stub_font = lambda: font
     current_turn = 0
@@ -138,6 +143,8 @@ def reset_game():
 
 # Rules pop-up state
 show_rules = False
+
+show_stats_overlay = False
 
 # Main loop
 running = True
@@ -197,13 +204,14 @@ while running:
                         else:
                             message = 'Click an active (unexhausted) blue unit.'
                     else:
-                        # If target is enemy and in attack range
+                        # ATTACK CHECK FIRST
                         if clicked and clicked.owner == 1 and not selected_unit.has_attacked:
                             # melee or ranged
                             if isinstance(selected_unit, Longbow):
                                 if selected_unit.can_attack(clicked, units, terrain_map):
                                     selected_unit.animate_attack(screen, clicked, font)
                                     hit, dmg = selected_unit.try_attack(clicked)
+                                    stats.record_attack(0, hit, dmg)
                                     selected_unit.has_attacked = True
                                     message = f'Longbow attack -> hit={hit} dmg={dmg}'
                                     selected_unit = None
@@ -214,13 +222,14 @@ while running:
                                 if selected_unit.distance_to(clicked) <= 1:
                                     selected_unit.animate_attack(screen, clicked, font)
                                     hit, dmg = selected_unit.try_attack(clicked)
+                                    stats.record_attack(0, hit, dmg)
                                     selected_unit.has_attacked = True
                                     message = f'Attack -> hit={hit} dmg={dmg}'
                                     selected_unit = None
                                     valid_moves = []
                                 else:
                                     message = 'Enemy not adjacent.'
-                        # Move
+                        # MOVE CHECK SECOND
                         elif (q, r) in valid_moves and not selected_unit.has_moved:
                             # don't move into rock or occupied
                             if terrain_map.get((q, r)) == TERRAIN_ROCK:
@@ -236,19 +245,51 @@ while running:
                         else:
                             message = 'Invalid action or unit exhausted.'
             elif state == STATE_GAMEOVER:
-                if reset_rect.collidepoint(mx, my):
-                    reset_game()
-                if quit_rect.collidepoint(mx, my):
-                    running = False
+                # --- Button layout for game over ---
+                button_labels = [
+                    ('Play Again', 'reset'),
+                    ('Quit', 'quit'),
+                    ('Export Stats (CSV)', 'export'),
+                    ('Show Stats', 'stats')
+                ]
+                button_height = 42
+                button_width = 180
+                spacing = 18
+                total_height = len(button_labels) * button_height + (len(button_labels)-1)*spacing
+                start_y = SCREEN_HEIGHT//2 + 20
+                button_rects = []
+                for i, (label, key) in enumerate(button_labels):
+                    y = start_y + i*(button_height+spacing)
+                    x = SCREEN_WIDTH//2 - button_width//2
+                    rect = pygame.Rect(x, y, button_width, button_height)
+                    button_rects.append((key, rect))
+                # --- Event handling for buttons ---
+                if show_stats_overlay:
+                    overlay_close_rect = pygame.Rect(SCREEN_WIDTH//2 + 220 - 50, SCREEN_HEIGHT//2 - 180 + 10, 40, 40)
+                    if overlay_close_rect.collidepoint(mx, my):
+                        show_stats_overlay = False
+                else:
+                    for key, rect in button_rects:
+                        if rect.collidepoint(mx, my):
+                            if key == 'reset':
+                                reset_game()
+                            elif key == 'quit':
+                                running = False
+                            elif key == 'export':
+                                stats.export_csv('tinyhex_stats.csv')
+                                message = 'Stats exported to tinyhex_stats.csv.'
+                            elif key == 'stats':
+                                show_stats_overlay = True
 
 
     # AI phase automatic when it's AI's turn and state is playing
     if state == STATE_PLAYING and current_turn == 1:
-        # AI will attempt to move + attack for each unit once
         ai.take_actions()
         end_turn()
+        stats.turns += 1
 
     # Remove dead units
+    # Remove dead units (no need to record here, handled in try_attack)
     units = [u for u in units if u.alive]
 
     # Victory check
@@ -258,6 +299,7 @@ while running:
         state = STATE_GAMEOVER
         winner = 'Player' if player_alive else 'AI'
         message = f'Game Over — {winner} wins.'
+        stats.set_winner(winner)
 
     # --- Render ---
     screen.fill(TAN)
@@ -271,7 +313,7 @@ while running:
         ui.draw_button(screen, start_rect, 'Start Game', font_sub, bg=GREEN, fg=BLACK)
         ui.draw_button(screen, rules_rect, 'Rules', font_sub, bg=GRAY, fg=BLACK)
         ui.draw_button(screen, quit_rect, 'Quit', font_sub, bg=RED, fg=WHITE)
-        footer = font_sub.render('by Brandon Wallace; prototype v.1.1', True, BLACK)
+        footer = font_sub.render('by Brandon Wallace; prototype v.1.4', True, BLACK)
         screen.blit(footer, (12, SCREEN_HEIGHT - 36))
         if show_rules:
             overlay_rect = pygame.Rect(100, 100, 600, 400)
@@ -288,7 +330,7 @@ while running:
                 "6. Attacks are probabilistic; stronger units are more likely to hit.",
                 "7. Click the same unit again to deselect it before acting.",
                 "8. When one side’s units are destroyed, the game ends.",
-                "9. Terrain only affects the Blue player since they are the invading military.",
+                "9. Only one unit can occupy a hex at any time.",
                 "",
                 "Click anywhere again to close this window."
             ]
@@ -320,8 +362,47 @@ while running:
         if state == STATE_GAMEOVER:
             over = font_title.render('GAME OVER', True, BLACK)
             screen.blit(over, (SCREEN_WIDTH//2 - over.get_width()//2, SCREEN_HEIGHT//2 - 40))
-            ui.draw_button(screen, reset_rect, 'Play Again', font, bg=GREEN)
-            ui.draw_button(screen, quit_rect, 'Quit', font, bg=RED)
+            # Layout buttons vertically with spacing and consistent size
+            button_labels = [
+                ('Play Again', GREEN, BLACK),
+                ('Quit', RED, (255,255,255)),
+                ('Export Stats (CSV)', GRAY, BLACK),
+                ('Show Stats', GRAY, BLACK)
+            ]
+            button_height = 42
+            button_width = 180
+            spacing = 18
+            total_height = len(button_labels) * button_height + (len(button_labels)-1)*spacing
+            start_y = SCREEN_HEIGHT//2 + 20
+            button_rects = []
+            for i, (label, bg, fg) in enumerate(button_labels):
+                y = start_y + i*(button_height+spacing)
+                x = SCREEN_WIDTH//2 - button_width//2
+                rect = pygame.Rect(x, y, button_width, button_height)
+                button_rects.append(rect)
+                ui.draw_button(screen, rect, label, font, bg=bg, fg=fg)
+            # Show stats overlay if needed
+            if show_stats_overlay:
+                overlay_height = 440  # Increased height for more lines
+                overlay_rect = pygame.Rect(SCREEN_WIDTH//2 - 220, SCREEN_HEIGHT//2 - overlay_height//2, 440, overlay_height)
+                pygame.draw.rect(screen, (245, 245, 220), overlay_rect)
+                pygame.draw.rect(screen, BLACK, overlay_rect, 3)
+                summary = stats.summary()
+                y = overlay_rect.y + 30
+                title = font_title.render('Game Statistics', True, BLACK)
+                screen.blit(title, (overlay_rect.x + (overlay_rect.width-title.get_width())//2, y))
+                y += 60
+                for k, v in summary.items():
+                    txt = font.render(f"{k}: {v}", True, BLACK)
+                    screen.blit(txt, (overlay_rect.x + 40, y))
+                    y += 28
+                # No close button; click anywhere on overlay to close
+            if show_stats_overlay:
+                overlay_height = 440  # Must match above
+                overlay_rect = pygame.Rect(SCREEN_WIDTH//2 - 220, SCREEN_HEIGHT//2 - overlay_height//2, 440, overlay_height)
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if overlay_rect.collidepoint(mx, my):
+                        show_stats_overlay = False
 
     pygame.display.flip()
     clock.tick(FPS)

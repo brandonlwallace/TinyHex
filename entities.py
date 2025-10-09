@@ -6,7 +6,7 @@ from settings import RED, BLUE, BLACK, FOREST, TERRAIN_FOREST, TERRAIN_ROCK
 
 class Unit:
     # A minimal unit with health, attack, movement, owner (0=player,1=AI)
-    def __init__(self, name, q, r, owner=0):
+    def __init__(self, name, q, r, owner=0, record_unit_lost=None):
         self.name = name
         self.q = q
         self.r = r
@@ -19,6 +19,7 @@ class Unit:
         # action flags used for turn-by-turn activation
         self.has_moved = False
         self.has_attacked = False
+        self.record_unit_lost = record_unit_lost
 
     def pixel_pos(self):
         return axial_to_pixel(self.q, self.r)
@@ -58,15 +59,17 @@ class Unit:
             # damage is probabilistic around attack stat
             dmg = max(1, int(random.gauss(self.attack, 1)))
             target.hp -= dmg
-            if target.hp <= 0:
+            if target.hp <= 0 and target.alive:
                 target.alive = False
+                if hasattr(target, 'record_unit_lost') and target.record_unit_lost:
+                    target.record_unit_lost(target.owner)
             return True, dmg
         else:
             return False, 0
 
     def animate_attack(self, surface, target, font, shake_intensity=6, flashes=2):
         """Simple flash and shake animation when this unit attacks a target.
-        This blocks briefly to show feedback (simple and effective for prototypes).
+        Simple and effective for prototype; will update with something cooler later.
         """
         import time
         orig_surf = surface.copy()
@@ -110,8 +113,8 @@ class Longbow(Unit):
     """Ranged unit. Can attack at a distance if line of sight is clear.
     It is represented as a triangle icon.
     """
-    def __init__(self, name, q, r, owner=0):
-        super().__init__(name, q, r, owner)
+    def __init__(self, name, q, r, owner=0, record_unit_lost=None):
+        super().__init__(name, q, r, owner, record_unit_lost=record_unit_lost)
         self.attack = 3
         self.range = 3
 
