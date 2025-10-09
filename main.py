@@ -85,6 +85,7 @@ end_turn_rect = pygame.Rect(SCREEN_WIDTH - 170, 12, 150, 36)
 reset_rect = pygame.Rect(SCREEN_WIDTH - 170, 58, 150, 36)
 start_rect = pygame.Rect(SCREEN_WIDTH//2 - 90, SCREEN_HEIGHT//2 + 40, 180, 42)
 quit_rect = pygame.Rect(SCREEN_WIDTH//2 - 90, SCREEN_HEIGHT//2 + 96, 180, 42)
+rules_rect = pygame.Rect(SCREEN_WIDTH//2 - 90, SCREEN_HEIGHT//2 - 20, 180, 42)
 
 # Helpers
 def unit_at(q, r):
@@ -135,6 +136,9 @@ def reset_game():
     state = STATE_MENU
     message = 'Welcome back.'
 
+# Rules pop-up state
+show_rules = False
+
 # Main loop
 running = True
 while running:
@@ -144,14 +148,24 @@ while running:
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
             if state == STATE_MENU:
-                if start_rect.collidepoint(mx, my):
-                    state = STATE_PLAYING
-                    message = 'Battle begins.'
-                    # ensure fresh action flags
-                    reset_action_flags(0)
-                    reset_action_flags(1)
-                elif quit_rect.collidepoint(mx, my):
-                    running = False
+                if show_rules:
+                    # Clicking anywhere on overlay or Rules button closes it
+                    if rules_rect.collidepoint(mx, my):
+                        show_rules = False
+                    else:
+                        # Allow clicking outside the button to also close
+                        show_rules = False
+                else:
+                    if start_rect.collidepoint(mx, my):
+                        state = STATE_PLAYING
+                        message = 'Battle begins.'
+                        # ensure fresh action flags
+                        reset_action_flags(0)
+                        reset_action_flags(1)
+                    elif rules_rect.collidepoint(mx, my):
+                        show_rules = True
+                    elif quit_rect.collidepoint(mx, my):
+                        running = False
             elif state == STATE_PLAYING:
                 # UI buttons
                 if end_turn_rect.collidepoint(mx, my):
@@ -255,9 +269,35 @@ while running:
         screen.blit(bg_surface, (0, 0))
         ui.draw_title(screen, 'TinyHex', 'a tiny tactical hex wargame', font_title, font_sub, y_offset=60)
         ui.draw_button(screen, start_rect, 'Start Game', font_sub, bg=GREEN, fg=BLACK)
+        ui.draw_button(screen, rules_rect, 'Rules', font_sub, bg=GRAY, fg=BLACK)
         ui.draw_button(screen, quit_rect, 'Quit', font_sub, bg=RED, fg=WHITE)
         footer = font_sub.render('by Brandon Wallace; prototype v.1.1', True, BLACK)
         screen.blit(footer, (12, SCREEN_HEIGHT - 36))
+        if show_rules:
+            overlay_rect = pygame.Rect(100, 100, 600, 400)
+            pygame.draw.rect(screen, (245, 245, 220), overlay_rect)  # light tan
+            pygame.draw.rect(screen, BLACK, overlay_rect, 3)
+            rules_lines = [
+                "TinyHex Rulebook",
+                "",
+                "1. Each side commands Ground Forces (circles) and Archer Forces (triangles).",
+                "2. All Forces can move up to the highlighted numbered of hexes and attack adjacent enemies.",
+                "3. Archer Forces can also shoot up to 3 hexes in a straight line, if no units block line of sight.",
+                "4. Each unit may move and attack once per turn.",
+                "5. After all your units act, click 'End Turn' to let the enemy move and fight.",
+                "6. Attacks are probabilistic; stronger units are more likely to hit.",
+                "7. Click the same unit again to deselect it before acting.",
+                "8. When one side’s units are destroyed, the game ends.",
+                "9. Terrain only affects the Blue player since they are the invading military.",
+                "",
+                "Click anywhere again to close this window."
+            ]
+            y = 120
+            for line in rules_lines:
+                txt = font.render(line, True, BLACK)
+                screen.blit(txt, (overlay_rect.x + 20, y))
+                y += 28
+
     elif state == STATE_PLAYING or state == STATE_GAMEOVER:
         # map and terrain
         draw_map(screen, map_coords, terrain_map)
