@@ -148,6 +148,7 @@ show_stats_overlay = False
 
 # Main loop
 running = True
+floating_texts = []
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -210,10 +211,14 @@ while running:
                             if isinstance(selected_unit, Longbow):
                                 if selected_unit.can_attack(clicked, units, terrain_map):
                                     selected_unit.animate_attack(screen, clicked, font)
-                                    hit, dmg = selected_unit.try_attack(clicked)
+                                    hit, dmg = selected_unit.try_attack(clicked, terrain_map=terrain_map)
                                     stats.record_attack(0, hit, dmg)
                                     selected_unit.has_attacked = True
                                     message = f'Longbow attack -> hit={hit} dmg={dmg}'
+                                    # Floating text
+                                    tx, ty = axial_to_pixel(clicked.q, clicked.r)
+                                    text = f"{'Miss' if not hit else f'Hit: {dmg}'}"
+                                    floating_texts.append({'text': text, 'x': tx, 'y': ty, 'timer': 40})
                                     selected_unit = None
                                     valid_moves = []
                                 else:
@@ -221,10 +226,14 @@ while running:
                             else:
                                 if selected_unit.distance_to(clicked) <= 1:
                                     selected_unit.animate_attack(screen, clicked, font)
-                                    hit, dmg = selected_unit.try_attack(clicked)
+                                    hit, dmg = selected_unit.try_attack(clicked, terrain_map=terrain_map)
                                     stats.record_attack(0, hit, dmg)
                                     selected_unit.has_attacked = True
                                     message = f'Attack -> hit={hit} dmg={dmg}'
+                                    # Floating text
+                                    tx, ty = axial_to_pixel(clicked.q, clicked.r)
+                                    text = f"{'Miss' if not hit else f'Hit: {dmg}'}"
+                                    floating_texts.append({'text': text, 'x': tx, 'y': ty, 'timer': 40})
                                     selected_unit = None
                                     valid_moves = []
                                 else:
@@ -285,6 +294,14 @@ while running:
     # AI phase automatic when it's AI's turn and state is playing
     if state == STATE_PLAYING and current_turn == 1:
         ai.take_actions()
+        # After AI attacks, show floating text for each attack
+        for u in units:
+            if hasattr(u, 'last_attack_result') and u.last_attack_result:
+                hit, dmg, target = u.last_attack_result
+                tx, ty = axial_to_pixel(target.q, target.r)
+                text = f"{'Miss' if not hit else f'Hit: {dmg}'}"
+                floating_texts.append({'text': text, 'x': tx, 'y': ty, 'timer': 40})
+                u.last_attack_result = None
         end_turn()
         stats.turns += 1
 
@@ -313,7 +330,7 @@ while running:
         ui.draw_button(screen, start_rect, 'Start Game', font_sub, bg=GREEN, fg=BLACK)
         ui.draw_button(screen, rules_rect, 'Rules', font_sub, bg=GRAY, fg=BLACK)
         ui.draw_button(screen, quit_rect, 'Quit', font_sub, bg=RED, fg=WHITE)
-        footer = font_sub.render('by Brandon Wallace; prototype v.1.4', True, BLACK)
+        footer = font_sub.render('by Brandon Wallace; prototype v.2.1', True, BLACK)
         screen.blit(footer, (12, SCREEN_HEIGHT - 36))
         if show_rules:
             overlay_rect = pygame.Rect(100, 100, 600, 400)
@@ -323,15 +340,15 @@ while running:
                 "TinyHex Rulebook",
                 "",
                 "1. Each side commands Ground Forces (circles) and Archer Forces (triangles).",
-                "2. All Forces can move up to the highlighted numbered of hexes and attack adjacent enemies.",
-                "3. Archer Forces can also shoot up to 3 hexes in a straight line, if no units block line of sight.",
+                "2. All Forces can move within their highlighted hexes and attack adjacent enemies.",
+                "3. Archer Forces can also shoot up to 3 hexes, in a straight line, if nothing blocks line of sight.",
                 "4. Each unit may move and attack once per turn.",
                 "5. After all your units act, click 'End Turn' to let the enemy move and fight.",
                 "6. Attacks are probabilistic; stronger units are more likely to hit.",
-                "7. Click the same unit again to deselect it before acting.",
-                "8. When one side’s units are destroyed, the game ends.",
-                "9. Only one unit can occupy a hex at any time.",
-                "",
+                "7. Forests provide cover. Units in forests are harder to hit.",
+                "8. Rocks block movement and line of sight.",
+                "9. Click the same unit again to deselect it before acting.",
+                "10. When all of one side’s units are destroyed, the game ends.",
                 "Click anywhere again to close this window."
             ]
             y = 120
@@ -403,6 +420,14 @@ while running:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if overlay_rect.collidepoint(mx, my):
                         show_stats_overlay = False
+
+    # Animate floating texts
+    for ft in floating_texts[:]:
+        txt = font.render(ft['text'], True, (0,0,0))
+        screen.blit(txt, (ft['x'] - txt.get_width()//2, ft['y'] - ft['timer']))
+        ft['timer'] -= 1
+        if ft['timer'] <= 0:
+            floating_texts.remove(ft)
 
     pygame.display.flip()
     clock.tick(FPS)

@@ -47,13 +47,17 @@ class Unit:
                 results.append((cq, cr))
         return results
 
-    def try_attack(self, target):
-        # Probabilistic adjudication: hit chance depends on relative HP and randomness
+    def try_attack(self, target, terrain_map=None):
+        # Probabilistic adjudication: hit chance depends on relative HP, randomness, and terrain
         if not target or not target.alive:
             return False, 0
         base_hit = 0.6
         hp_factor = max(-0.2, min(0.2, (self.hp - target.hp) / self.max_hp))
         hit_chance = base_hit + hp_factor
+        # Forest cover: reduce hit chance if target is in forest
+        if terrain_map and terrain_map.get((target.q, target.r)) == 'forest':
+            hit_chance -= 0.2  # 20% harder to hit in forest
+        hit_chance = max(0.05, min(0.95, hit_chance))
         roll = random.random()
         if roll <= hit_chance:
             # damage is probabilistic around attack stat
@@ -147,13 +151,13 @@ class Longbow(Unit):
 
     def draw(self, surface, font):
         x, y = self.pixel_pos()
-        # triangle pointing up for player, down for AI
+        # triangle pointing up for player (blue), down for AI (red)
         if self.owner == 0:
             pts = [(x, y-12), (x-10, y+10), (x+10, y+10)]
-            col = (20, 140, 140)
+            col = BLUE
         else:
             pts = [(x, y+12), (x-10, y-10), (x+10, y-10)]
-            col = (140, 20, 140)
+            col = RED
         pygame.draw.polygon(surface, col, pts)
         txt = font.render(str(self.hp), True, BLACK)
         surface.blit(txt, (x - txt.get_width()//2, y - txt.get_height()//2))
