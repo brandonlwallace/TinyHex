@@ -64,12 +64,32 @@ class Unit:
             dmg = max(1, int(random.gauss(self.attack, 1)))
             target.hp -= dmg
             if target.hp <= 0 and target.alive:
+                # Play death animation before removing
+                if hasattr(target, 'death_animation'):
+                    import pygame, time
+                    surface = pygame.display.get_surface()
+                    if surface:
+                        target.death_animation(surface)
                 target.alive = False
                 if hasattr(target, 'record_unit_lost') and target.record_unit_lost:
                     target.record_unit_lost(target.owner)
             return True, dmg
         else:
             return False, 0
+    def death_animation(self, surface):
+        # Simple fade out and shrink animation
+        import pygame, time
+        x, y = self.pixel_pos()
+        col = BLUE if self.owner == 0 else RED
+        for i in range(12, 0, -2):
+            surface_copy = surface.copy()
+            pygame.draw.circle(surface_copy, col, (x, y), i)
+            pygame.display.flip()
+            time.sleep(0.03)
+        # Final frame: erase
+        pygame.draw.circle(surface, (0,0,0), (x, y), 14)
+        pygame.display.flip()
+        time.sleep(0.02)
 
     def animate_attack(self, surface, target, font, shake_intensity=6, flashes=2):
         """Simple flash and shake animation when this unit attacks a target.
@@ -114,6 +134,24 @@ class Unit:
 
 # Longbow special unit
 class Longbow(Unit):
+    def death_animation(self, surface):
+        # Fade out and shrink triangle
+        import pygame, time
+        x, y = self.pixel_pos()
+        col = BLUE if self.owner == 0 else RED
+        for i in range(12, 0, -2):
+            surface_copy = surface.copy()
+            if self.owner == 0:
+                pts = [(x, y-i), (x-i, y+i), (x+i, y+i)]
+            else:
+                pts = [(x, y+i), (x-i, y-i), (x+i, y-i)]
+            pygame.draw.polygon(surface_copy, col, pts)
+            pygame.display.flip()
+            time.sleep(0.03)
+        # Final frame: erase
+        pygame.draw.circle(surface, (0,0,0), (x, y), 14)
+        pygame.display.flip()
+        time.sleep(0.02)
     """Ranged unit. Can attack at a distance if line of sight is clear.
     It is represented as a triangle icon.
     """

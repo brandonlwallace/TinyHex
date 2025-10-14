@@ -17,6 +17,7 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption('TinyHex')
 clock = pygame.time.Clock()
 font = pygame.font.SysFont('Arial', 16)
+font_tooltip = pygame.font.SysFont('Arial', 12)
 font_title = pygame.font.SysFont('Times New Roman', 48, bold=True)
 font_sub = pygame.font.SysFont('Arial', 20)
 
@@ -364,8 +365,50 @@ while running:
         if valid_moves:
             draw_map(screen, valid_moves, {}, highlight_set=set(valid_moves))
         # draw units
+        mouse_unit = None
+        mx, my = pygame.mouse.get_pos()
         for u in units:
             u.draw(screen, font)
+            # Check if mouse is over this unit
+            ux, uy = u.pixel_pos()
+            if (mx - ux) ** 2 + (my - uy) ** 2 < 16 ** 2:
+                mouse_unit = u
+
+        # Draw tooltip if hovering over a unit
+        if mouse_unit:
+            tooltip_lines = []
+            # Strength
+            tooltip_lines.append(f"Strength: {mouse_unit.hp}/{mouse_unit.max_hp}")
+            # Moves/attacks left
+            if not mouse_unit.has_moved or not mouse_unit.has_attacked:
+                acts = []
+                if not mouse_unit.has_moved:
+                    acts.append("Move: 1 Remaining")
+                if not mouse_unit.has_attacked:
+                    acts.append("Attack: 1 Remaining")
+                tooltip_lines.append(", ".join(acts))
+            else:
+                tooltip_lines.append("Exhausted")
+            # Forest cover
+            if terrain_map.get((mouse_unit.q, mouse_unit.r)) == TERRAIN_FOREST:
+                tooltip_lines.append("In Forest: Cover Increased")
+            # Unit type
+            if isinstance(mouse_unit, Longbow):
+                tooltip_lines.append("Type: Archer")
+            else:
+                tooltip_lines.append("Type: Ground")
+            # Side
+            tooltip_lines.append("Player" if mouse_unit.owner == 0 else "Enemy")
+            # Tooltip box (smaller font and box)
+            tip_w = max(font_tooltip.size(line)[0] for line in tooltip_lines) + 10
+            tip_h = len(tooltip_lines) * 16 + 6
+            tip_x = min(mx + 16, SCREEN_WIDTH - tip_w - 4)
+            tip_y = min(my + 16, SCREEN_HEIGHT - tip_h - 4)
+            pygame.draw.rect(screen, (255,255,220), (tip_x, tip_y, tip_w, tip_h))
+            pygame.draw.rect(screen, BLACK, (tip_x, tip_y, tip_w, tip_h), 1)
+            for i, line in enumerate(tooltip_lines):
+                txt = font_tooltip.render(line, True, BLACK)
+                screen.blit(txt, (tip_x + 5, tip_y + 3 + i*16))
         # UI buttons
         if state == STATE_PLAYING:
             ui.draw_button(screen, end_turn_rect, 'End Turn', font, bg=GRAY)
