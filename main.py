@@ -50,16 +50,22 @@ def spawn_units(record_unit_lost=None):
         q, r = coord
         # bias spawn by r coordinate
         if len([u for u in units if u.owner == 0]) < MAX_UNITS//2 and r < 1:
-            units.append(Unit('P', q, r, owner=0, record_unit_lost=record_unit_lost))
+            u = Unit('P', q, r, owner=0, record_unit_lost=record_unit_lost)
+            units.append(u)
+            stats.register_unit(u)
         elif len([u for u in units if u.owner == 1]) < MAX_UNITS - MAX_UNITS//2 and r > -1:
-            units.append(Unit('E', q, r, owner=1, record_unit_lost=record_unit_lost))
+            u = Unit('E', q, r, owner=1, record_unit_lost=record_unit_lost)
+            units.append(u)
+            stats.register_unit(u)
     # replace one unit on each side with a Longbow if available
     for side in [0, 1]:
         team = [u for u in units if u.owner == side]
         if team:
             victim = team[0]
             units.remove(victim)
-            units.append(Longbow('L', victim.q, victim.r, owner=side, record_unit_lost=record_unit_lost))
+            l = Longbow('L', victim.q, victim.r, owner=side, record_unit_lost=record_unit_lost)
+            units.append(l)
+            stats.register_unit(l)
     return units
 
 
@@ -212,7 +218,7 @@ while running:
                             if isinstance(selected_unit, Longbow):
                                 if selected_unit.can_attack(clicked, units, terrain_map):
                                     selected_unit.animate_attack(screen, clicked, font)
-                                    hit, dmg = selected_unit.try_attack(clicked, terrain_map=terrain_map)
+                                    hit, dmg = selected_unit.try_attack(clicked, terrain_map=terrain_map, stats=stats, turn=stats.turns)
                                     stats.record_attack(0, hit, dmg)
                                     selected_unit.has_attacked = True
                                     message = f'Longbow attack -> hit={hit} dmg={dmg}'
@@ -227,7 +233,7 @@ while running:
                             else:
                                 if selected_unit.distance_to(clicked) <= 1:
                                     selected_unit.animate_attack(screen, clicked, font)
-                                    hit, dmg = selected_unit.try_attack(clicked, terrain_map=terrain_map)
+                                    hit, dmg = selected_unit.try_attack(clicked, terrain_map=terrain_map, stats=stats, turn=stats.turns)
                                     stats.record_attack(0, hit, dmg)
                                     selected_unit.has_attacked = True
                                     message = f'Attack -> hit={hit} dmg={dmg}'

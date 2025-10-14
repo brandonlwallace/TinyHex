@@ -17,6 +17,29 @@ class GameStats:
         self.start_time = datetime.datetime.now()
         self.end_time = None
         self.winner = None
+        # Per-unit stats: unit_id -> dict
+        self.unit_stats = {}
+
+    def register_unit(self, unit):
+        # Call this when a unit is created
+        self.unit_stats[unit.unit_id] = {
+            'unit_id': unit.unit_id,
+            'name': unit.name,
+            'type': 'Archer' if hasattr(unit, 'range') else 'Ground',
+            'owner': 'Player' if unit.owner == 0 else 'AI',
+            'spawn_q': unit.q,
+            'spawn_r': unit.r,
+            'max_hp': unit.max_hp,
+            'attacks': 0,
+            'hits': 0,
+            'damage_dealt': 0,
+            'damage_taken': 0,
+            'turn_spawned': self.turns,
+            'turn_killed': None,
+            'final_q': unit.q,
+            'final_r': unit.r,
+            'alive': True
+        }
 
     def record_attack(self, owner, hit, dmg):
         if owner == 0:
@@ -59,6 +82,19 @@ class GameStats:
         data = self.summary()
         with open(filename, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
+            # Write summary first
             writer.writerow(['stat', 'value'])
             for k, v in data.items():
                 writer.writerow([k, v])
+            writer.writerow([])
+            # Write per-unit stats table
+            if self.unit_stats:
+                unit_keys = [
+                    'unit_id', 'name', 'type', 'owner', 'spawn_q', 'spawn_r', 'max_hp',
+                    'attacks', 'hits', 'damage_dealt', 'damage_taken',
+                    'turn_spawned', 'turn_killed', 'final_q', 'final_r', 'alive'
+                ]
+                writer.writerow(['Per-Unit Stats:'])
+                writer.writerow(unit_keys)
+                for u in self.unit_stats.values():
+                    writer.writerow([u.get(k, '') for k in unit_keys])

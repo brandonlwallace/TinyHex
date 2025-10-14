@@ -6,6 +6,7 @@ from settings import RED, BLUE, BLACK, FOREST, TERRAIN_FOREST, TERRAIN_ROCK
 
 class Unit:
     # A minimal unit with health, attack, movement, owner (0=player,1=AI)
+    _id_counter = 0
     def __init__(self, name, q, r, owner=0, record_unit_lost=None):
         self.name = name
         self.q = q
@@ -20,6 +21,9 @@ class Unit:
         self.has_moved = False
         self.has_attacked = False
         self.record_unit_lost = record_unit_lost
+        # Unique ID for per-unit stats
+        self.unit_id = Unit._id_counter
+        Unit._id_counter += 1
 
     def pixel_pos(self):
         return axial_to_pixel(self.q, self.r)
@@ -47,7 +51,7 @@ class Unit:
                 results.append((cq, cr))
         return results
 
-    def try_attack(self, target, terrain_map=None):
+    def try_attack(self, target, terrain_map=None, stats=None, turn=None):
         # Probabilistic adjudication: hit chance depends on relative HP, randomness, and terrain
         if not target or not target.alive:
             return False, 0
@@ -59,10 +63,25 @@ class Unit:
             hit_chance -= 0.2  # 20% harder to hit in forest
         hit_chance = max(0.05, min(0.95, hit_chance))
         roll = random.random()
+        if stats:
+            # Record attack for attacker
+            s = stats.unit_stats.get(self.unit_id)
+            if s:
+                s['attacks'] += 1
         if roll <= hit_chance:
             # damage is probabilistic around attack stat
             dmg = max(1, int(random.gauss(self.attack, 1)))
             target.hp -= dmg
+            if stats:
+                # Record hit and damage for attacker
+                s = stats.unit_stats.get(self.unit_id)
+                if s:
+                    s['hits'] += 1
+                    s['damage_dealt'] += dmg
+                # Record damage taken for target
+                t = stats.unit_stats.get(target.unit_id)
+                if t:
+                    t['damage_taken'] += dmg
             if target.hp <= 0 and target.alive:
                 # Play death animation before removing
                 if hasattr(target, 'death_animation'):
@@ -71,6 +90,13 @@ class Unit:
                     if surface:
                         target.death_animation(surface)
                 target.alive = False
+                if stats:
+                    t = stats.unit_stats.get(target.unit_id)
+                    if t:
+                        t['alive'] = False
+                        t['turn_killed'] = turn if turn is not None else 0
+                        t['final_q'] = target.q
+                        t['final_r'] = target.r
                 if hasattr(target, 'record_unit_lost') and target.record_unit_lost:
                     target.record_unit_lost(target.owner)
             return True, dmg
