@@ -330,7 +330,7 @@ while running:
         ui.draw_button(screen, start_rect, 'Start Game', font_sub, bg=GREEN, fg=BLACK)
         ui.draw_button(screen, rules_rect, 'Rules', font_sub, bg=GRAY, fg=BLACK)
         ui.draw_button(screen, quit_rect, 'Quit', font_sub, bg=RED, fg=WHITE)
-        footer = font_sub.render('by Brandon Wallace; prototype v.2.1', True, BLACK)
+        footer = font_sub.render('by Brandon Wallace; prototype v.2.3', True, BLACK)
         screen.blit(footer, (12, SCREEN_HEIGHT - 36))
         if show_rules:
             overlay_rect = pygame.Rect(100, 100, 600, 400)
@@ -369,7 +369,7 @@ while running:
         # UI buttons
         if state == STATE_PLAYING:
             ui.draw_button(screen, end_turn_rect, 'End Turn', font, bg=GRAY)
-        ui.draw_button(screen, reset_rect, 'Reset', font, bg=GRAY)
+            ui.draw_button(screen, reset_rect, 'Reset', font, bg=GRAY)
         # turn & message
         turn_text = font.render(f'Turn: {"Player" if current_turn==0 else "AI"}', True, BLACK)
         screen.blit(turn_text, (8, 8))
