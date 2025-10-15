@@ -392,7 +392,7 @@ while running:
                     acts.append("Move: 1 Remaining")
                 if not mouse_unit.has_attacked:
                     acts.append("Attack: 1 Remaining")
-                tooltip_lines.append(", ".join(acts))
+                tooltip_lines.append(" and ".join(acts))
             else:
                 tooltip_lines.append("Exhausted")
             # Forest cover
