@@ -1,0 +1,10 @@
+{
+  "target_hp_weight": 0.8,
+  "target_distance_weight": 0.3,
+  "target_threat_weight": 1.21176,
+  "terrain_defense_weight": 0.51,
+  "safety_weight": 1.02,
+  "focus_fire_weight": 0.612,
+  "retreat_threshold": 0.35,
+  "formation_weight": 0.4
+}

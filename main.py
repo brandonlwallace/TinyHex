@@ -75,10 +75,13 @@ units = spawn_units(record_unit_lost=stats.record_unit_lost)
 # Hook the AI stubs to real references
 # Pass stats.record_attack to AI so it can track AI attacks
 ai = SimpleAI(units, map_coords, terrain_map, record_attack=stats.record_attack)
-# monkey patch animation references expected by ai module
+# monkey patch animation references expected by ai and rl_ai modules
 import ai as ai_module
+import rl_ai as rl_ai_module
 ai_module.screen_stub = lambda: screen
 ai_module.stub_font = lambda: font
+rl_ai_module.screen_stub = lambda: screen
+rl_ai_module.stub_font = lambda: font
 
 # Game state
 STATE_MENU = 'menu'
@@ -142,6 +145,8 @@ def reset_game():
     ai = SimpleAI(units, map_coords, terrain_map, record_attack=stats.record_attack)
     ai_module.screen_stub = lambda: screen
     ai_module.stub_font = lambda: font
+    rl_ai_module.screen_stub = lambda: screen
+    rl_ai_module.stub_font = lambda: font
     current_turn = 0
     reset_action_flags(0)
     reset_action_flags(1)
@@ -324,6 +329,9 @@ while running:
         winner = 'Player' if player_alive else 'AI'
         message = f'Game Over — {winner} wins.'
         stats.set_winner(winner)
+        # Learn from this game: update AI weights based on outcome
+        ai_won = (winner == 'AI')
+        ai.update_weights_from_game(ai_won)
 
     # --- Render ---
     screen.fill(TAN)
